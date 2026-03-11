@@ -1,0 +1,29 @@
+name: Daily Discord Weather
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  send-daily-weather:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call backend daily weather route
+        env:
+          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
+          CRON_SHARED_SECRET: ${{ secrets.CRON_SHARED_SECRET }}
+        run: |
+          if [ -z "$BACKEND_BASE_URL" ]; then
+            echo "BACKEND_BASE_URL secret is required"
+            exit 1
+          fi
+
+          if [ -z "$CRON_SHARED_SECRET" ]; then
+            echo "CRON_SHARED_SECRET secret is required"
+            exit 1
+          fi
+
+          BASE_URL="${BACKEND_BASE_URL%/}"
+          curl --fail-with-body -X POST "${BASE_URL}/discord/daily-weather" \
+            -H "X-CRON-TOKEN: ${CRON_SHARED_SECRET}"
