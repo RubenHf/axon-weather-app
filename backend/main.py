@@ -10,15 +10,15 @@ from fastapi import HTTPException
 from models import WeatherRequest
 from models import WeatherResponse
 
+load_dotenv()
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None)
 
 app.add_middleware(
     CORSMiddleware,  # ty:ignore[invalid-argument-type]
