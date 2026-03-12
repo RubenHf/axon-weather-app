@@ -33,7 +33,12 @@
    OPENAI_API_KEY=your_key_here
    DISCORD_WEBHOOK_URL=your_discord_webhook_url
    CRON_SHARED_SECRET=your_random_shared_secret
+   LANGFUSE_PUBLIC_KEY=pk-lf-...
+   LANGFUSE_SECRET_KEY=sk-lf-...
+   LANGFUSE_BASE_URL=https://cloud.langfuse.com
    ```
+
+   For US cloud, set `LANGFUSE_BASE_URL=https://us.cloud.langfuse.com`.
 
 ## Running
 

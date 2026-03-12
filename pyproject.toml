@@ -7,4 +7,5 @@ requires-python = ">=3.14"
 dependencies = [
     "baml-py>=0.218.1",
     "fastapi[standard]>=0.128.0",
+    "langfuse>=4.0.0",
 ]
