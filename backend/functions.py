@@ -12,6 +12,7 @@ from .settings import (
     ARCHIVE_WEATHER_ENDPOINT,
     DEFAULT_DAILY_LOCATION,
     FORECAST_WEATHER_ENDPOINT,
+    AIR_QUALITY_ENDPOINT,
     MAX_DAYS_RANGE,
     get_cron_shared_secret,
     get_discord_webhook_url,
@@ -25,6 +26,8 @@ def build_weather_endpoint(query_type: str) -> str:
         return ARCHIVE_WEATHER_ENDPOINT
     if query_type == "forecast":
         return FORECAST_WEATHER_ENDPOINT
+    if query_type == "air_quality":
+        return AIR_QUALITY_ENDPOINT
     logger.error("Invalid query type: %s", query_type)
     raise HTTPException(status_code=400, detail="Invalid query type")
 
@@ -140,6 +143,15 @@ async def generate_daily_copenhagen_answer() -> str:
             "weathercode",
         ],
     }
+    air_quality_plan = {
+        "hourly": [
+            "pm10",
+            "pm2_5",
+            "dust",
+            "uv_index",
+        ],
+        "forecast_days": 1,
+    }
 
     async with httpx.AsyncClient() as client:
         response = await client.get(
@@ -152,11 +164,42 @@ async def generate_daily_copenhagen_answer() -> str:
         )
         response.raise_for_status()
 
+        air_quality_response = await client.get(
+            AIR_QUALITY_ENDPOINT,
+            params={
+                **air_quality_plan,
+                "latitude": location.latitude,
+                "longitude": location.longitude,
+            },
+        )
+        air_quality_response.raise_for_status()
+        air_quality_data = air_quality_response.json()
+        hourly_air_quality = air_quality_data.get("hourly", {})
+        pm10_values = [value for value in hourly_air_quality.get("pm10", []) if value is not None]
+        pm2_5_values = [value for value in hourly_air_quality.get("pm2_5", []) if value is not None]
+        dust_values = [value for value in hourly_air_quality.get("dust", []) if value is not None]
+        uv_index_values = [value for value in hourly_air_quality.get("uv_index", []) if value is not None]
+
+        max_pm10 = max(pm10_values) if pm10_values else None
+        max_pm2_5 = max(pm2_5_values) if pm2_5_values else None
+        max_dust = max(dust_values) if dust_values else None
+        max_uv_index = max(uv_index_values) if uv_index_values else None
+
+        weather_data = response.json()
+        if max_pm10 is not None:
+            weather_data["pm10"] = max_pm10
+        if max_pm2_5 is not None:
+            weather_data["pm2_5"] = max_pm2_5
+        if max_dust is not None and max_dust > 0:
+            weather_data["dust"] = max_dust
+        if max_uv_index is not None:
+            weather_data["max_uv_index"] = max_uv_index
+
     all_api_data = [
         {
             "query_type": fixed_plan["query_type"],
             "date_range": f"{fixed_plan['start_date']} to {fixed_plan['end_date']}",
-            "data": response.json(),
+            "data": weather_data,
         }
     ]
 
@@ -164,7 +207,7 @@ async def generate_daily_copenhagen_answer() -> str:
         (
             "Create a structured morning weather briefing for Copenhagen today. "
             "Use the following section labels exactly once: "
-            "Temperatures, Precipitation, Wind, Practical advice, Overall."
+            "Temperatures, Precipitation, Wind, Air Quality, Practical advice, Overall."
         ),
         location.name,
         datetime.now().strftime("%Y-%m-%d %H"),
@@ -174,7 +217,7 @@ async def generate_daily_copenhagen_answer() -> str:
 
 
 def build_discord_embed(content: str) -> dict:
-    pattern = re.compile(r"(Temperatures|Precipitation|Wind|Practical advice|Overall)\s*[—-]\s*", re.IGNORECASE)
+    pattern = re.compile(r"(Temperatures|Precipitation|Wind|Air Quality|Practical advice|Overall)\s*[—-]\s*", re.IGNORECASE)
     matches = list(pattern.finditer(content))
     fields: list[dict[str, str | bool]] = []
 

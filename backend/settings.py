@@ -10,6 +10,7 @@ ALLOWED_ORIGINS = ["http://localhost:3000"]
 
 FORECAST_WEATHER_ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_WEATHER_ENDPOINT = "https://archive-api.open-meteo.com/v1/archive"
+AIR_QUALITY_ENDPOINT = "https://air-quality-api.open-meteo.com/v1/air-quality"
 
 DEFAULT_DAILY_LOCATION = Location(
     name="Copenhagen",
