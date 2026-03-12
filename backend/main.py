@@ -27,7 +27,7 @@ async def app_lifespan(_: FastAPI):
     shutdown_observability()
 
 
-app = FastAPI(docs_url="/docs", redoc_url=None, lifespan=app_lifespan)
+app = FastAPI(docs_url=None, redoc_url=None, lifespan=app_lifespan)
 
 app.add_middleware(
     CORSMiddleware,  # ty:ignore[invalid-argument-type]
@@ -91,7 +91,7 @@ async def send_daily_weather_to_discord(
             try:
                 validate_cron_token(x_cron_token)
                 answer = await generate_daily_copenhagen_answer()
-                # await send_to_discord(answer)
+                await send_to_discord(answer)
                 payload = {
                     "status": "sent",
                     "answer": answer,
