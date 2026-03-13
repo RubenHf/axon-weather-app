@@ -26,18 +26,15 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 # Generated classes (3)
 # #########################################################################
 
+class DailyBriefAnswer(BaseModel):
+    answer: typing.Optional[str] = None
+
 class OpenMeteoHistoricalRequest(BaseModel):
     query_type: typing.Optional[typing.Union[typing_extensions.Literal['archive'], typing_extensions.Literal['forecast']]] = None
     start_date: typing.Optional[str] = None
     end_date: typing.Optional[str] = None
     daily: typing.List[str]
     hourly: typing.List[str]
-
-class Resume(BaseModel):
-    name: typing.Optional[str] = None
-    email: typing.Optional[str] = None
-    experience: typing.List[str]
-    skills: typing.List[str]
 
 class WeatherAnswer(BaseModel):
     answer: typing.Optional[str] = None

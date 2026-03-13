@@ -44,18 +44,15 @@ def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
 # Generated classes (3)
 # #########################################################################
 
+class DailyBriefAnswer(BaseModel):
+    answer: str
+
 class OpenMeteoHistoricalRequest(BaseModel):
     query_type: typing.Union[typing_extensions.Literal['archive'], typing_extensions.Literal['forecast']]
     start_date: str
     end_date: str
     daily: typing.List[str]
     hourly: typing.List[str]
-
-class Resume(BaseModel):
-    name: str
-    email: str
-    experience: typing.List[str]
-    skills: typing.List[str]
 
 class WeatherAnswer(BaseModel):
     answer: str

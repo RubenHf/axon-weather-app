@@ -202,6 +202,63 @@ async def generate_weather_answer(request: WeatherRequest) -> str:
         )
         return answer.answer
 
+def reduce_hourly_data(data: dict) -> dict:
+    try: 
+        indices = range(0, 24, 3)
+        WMO = {
+            0: "clear",
+            1: "mostly clear",
+            2: "partly cloudy",
+            3: "overcast",
+            45: "fog",
+            48: "rime fog",
+            51: "light drizzle",
+            53: "moderate drizzle",
+            55: "dense drizzle",
+            56: "light freezing drizzle",
+            57: "dense freezing drizzle",
+            61: "light rain",
+            63: "moderate rain",
+            65: "heavy rain",
+            66: "light freezing rain",
+            67: "heavy freezing rain",
+            71: "light snow",
+            73: "moderate snow",
+            75: "heavy snow",
+            77: "snow grains",
+            80: "light rain showers",
+            81: "moderate rain showers",
+            82: "violent rain showers",
+            85: "light snow showers",
+            86: "heavy snow showers",
+            95: "thunderstorm",
+            96: "thunderstorm with light hail",
+            99: "thunderstorm with heavy hail",
+        }
+
+        def classify_rain(mm):
+            if mm == 0:
+                return "dry"
+            if mm < 0.2:
+                return "drizzle"
+            if mm < 2:
+                return "light rain"
+            if mm < 5:
+                return "moderate rain"
+            return "heavy rain"
+
+        reduced = {
+            "time": [data["hourly"]["time"][i].split("T")[1] for i in indices],
+            "temp": [data["hourly"]["temperature_2m"][i] for i in indices],
+            "wind": [data["hourly"]["windspeed_10m"][i] for i in indices],
+            "gusts": [data["hourly"]["windgusts_10m"][i] for i in indices],
+            "rain": [classify_rain(max(data["hourly"]["precipitation"][i: i+3])) for i in indices],
+            "weathercode": [WMO.get(data["hourly"]["weathercode"][i], "unknown") for i in indices],
+        }
+        return reduced
+    except Exception as e:
+        logger.error("Error reducing hourly data: %s", e)
+        return data
 
 async def generate_daily_copenhagen_answer() -> str:
     location = DEFAULT_DAILY_LOCATION
@@ -301,7 +358,7 @@ async def generate_daily_copenhagen_answer() -> str:
         max_dust = max(dust_values) if dust_values else None
         max_uv_index = max(uv_index_values) if uv_index_values else None
 
-        weather_data = forecast_data
+        weather_data = reduce_hourly_data(forecast_data)
         if max_pm10 is not None:
             weather_data["pm10"] = max_pm10
         if max_pm2_5 is not None:
@@ -328,21 +385,15 @@ async def generate_daily_copenhagen_answer() -> str:
         }
     ]
 
-    daily_prompt = (
-        "Create a structured morning weather briefing for Copenhagen today. "
-        "Use the following section labels exactly once: "
-        "Temperatures, Precipitation, Wind, Air Quality, Practical advice, Overall."
-    )
     current_datetime = datetime.now().strftime("%Y-%m-%d %H")
     daily_api_data = json.dumps(all_api_data, indent=2)
     with start_observation(
         name="daily-answer",
         as_type="generation",
-        metadata={"baml_function": "AnswerWeatherQuestion"},
+        metadata={"baml_function": "GenerateDailyBrief"},
         # model="baml",
     ) as daily_answer_observation:
-        answer = b.AnswerWeatherQuestion(
-            daily_prompt,
+        answer = b.GenerateDailyBrief(
             location.name,
             current_datetime,
             daily_api_data,

@@ -16,11 +16,11 @@ from . import stream_types
 
 type_map = {
 
+    "types.DailyBriefAnswer": types.DailyBriefAnswer,
+    "stream_types.DailyBriefAnswer": stream_types.DailyBriefAnswer,
+
     "types.OpenMeteoHistoricalRequest": types.OpenMeteoHistoricalRequest,
     "stream_types.OpenMeteoHistoricalRequest": stream_types.OpenMeteoHistoricalRequest,
-
-    "types.Resume": types.Resume,
-    "stream_types.Resume": stream_types.Resume,
 
     "types.WeatherAnswer": types.WeatherAnswer,
     "stream_types.WeatherAnswer": stream_types.WeatherAnswer,
