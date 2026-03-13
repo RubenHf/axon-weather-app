@@ -36,11 +36,11 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExtractOpenMeteoHistoricalRequest", llm_response=llm_response, mode="request")
         return typing.cast(typing.List["types.OpenMeteoHistoricalRequest"], __result__)
 
-    def ExtractResume(
+    def GenerateDailyBrief(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> types.Resume:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExtractResume", llm_response=llm_response, mode="request")
-        return typing.cast(types.Resume, __result__)
+    ) -> types.DailyBriefAnswer:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="GenerateDailyBrief", llm_response=llm_response, mode="request")
+        return typing.cast(types.DailyBriefAnswer, __result__)
 
     
 
@@ -62,10 +62,10 @@ class LlmStreamParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExtractOpenMeteoHistoricalRequest", llm_response=llm_response, mode="stream")
         return typing.cast(typing.List["stream_types.OpenMeteoHistoricalRequest"], __result__)
 
-    def ExtractResume(
+    def GenerateDailyBrief(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> stream_types.Resume:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExtractResume", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.Resume, __result__)
+    ) -> stream_types.DailyBriefAnswer:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="GenerateDailyBrief", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.DailyBriefAnswer, __result__)
 
     
