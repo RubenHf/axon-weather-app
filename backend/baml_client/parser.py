@@ -42,6 +42,12 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="GenerateDailyBrief", llm_response=llm_response, mode="request")
         return typing.cast(types.DailyBriefAnswer, __result__)
 
+    def GenerateNextHoursBrief(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.NextHoursBriefAnswer:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="GenerateNextHoursBrief", llm_response=llm_response, mode="request")
+        return typing.cast(types.NextHoursBriefAnswer, __result__)
+
     
 
 class LlmStreamParser:
@@ -67,5 +73,11 @@ class LlmStreamParser:
     ) -> stream_types.DailyBriefAnswer:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="GenerateDailyBrief", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.DailyBriefAnswer, __result__)
+
+    def GenerateNextHoursBrief(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.NextHoursBriefAnswer:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="GenerateNextHoursBrief", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.NextHoursBriefAnswer, __result__)
 
     

@@ -2,8 +2,11 @@ from datetime import datetime, timezone
 import json
 import logging
 import re
+from zoneinfo import ZoneInfo
 
 import httpx
+from nacl.exceptions import BadSignatureError
+from nacl.signing import VerifyKey
 from .baml_client import b
 from baml_py import Collector
 from fastapi import HTTPException
@@ -17,11 +20,25 @@ from .settings import (
     AIR_QUALITY_ENDPOINT,
     MAX_DAYS_RANGE,
     get_cron_shared_secret,
+    get_discord_application_id,
+    get_discord_bot_token,
+    get_discord_guild_id,
+    get_discord_public_key,
     get_discord_webhook_url,
 )
 
 logger = logging.getLogger(__name__)
 collector = Collector(name="weather-api")
+
+
+def _safe_timezone(timezone_name: str | None) -> timezone | ZoneInfo:
+    if not timezone_name:
+        return timezone.utc
+    try:
+        return ZoneInfo(timezone_name)
+    except Exception:
+        logger.warning("Invalid timezone from forecast response: %s", timezone_name)
+        return timezone.utc
 
 def build_weather_endpoint(query_type: str) -> str:
     if query_type == "archive":
@@ -407,6 +424,261 @@ async def generate_daily_copenhagen_answer() -> str:
         return answer.answer
 
 
+async def fetch_next_hours_weather_data(window_hours: int) -> dict:
+    location = DEFAULT_DAILY_LOCATION
+    if window_hours not in (2, 4):
+        raise HTTPException(status_code=400, detail="window_hours must be 2 or 4")
+    effective_hours = window_hours + 1
+
+    forecast_params = {
+        "latitude": location.latitude,
+        "longitude": location.longitude,
+        "hourly": [
+            "temperature_2m",
+            "precipitation",
+            "windspeed_10m",
+            "windgusts_10m",
+        ],
+        "forecast_days": 2,
+        "timezone": "auto",
+    }
+
+    with start_observation(
+        name="next-hours-weather-fetch",
+        as_type="span",
+        input={
+            "location": location.model_dump(),
+            "window_hours": window_hours,
+            "effective_hours": effective_hours,
+        },
+    ) as fetch_observation:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(FORECAST_WEATHER_ENDPOINT, params=forecast_params)
+            response.raise_for_status()
+            forecast_data = response.json()
+
+        timezone_name = forecast_data.get("timezone")
+        tz = _safe_timezone(timezone_name)
+        now_local = datetime.now(tz=tz)
+        hour_floor = now_local.replace(minute=0, second=0, microsecond=0)
+
+        hourly = forecast_data.get("hourly", {})
+        times = hourly.get("time", [])
+        temperatures = hourly.get("temperature_2m", [])
+        precipitation = hourly.get("precipitation", [])
+        windspeed = hourly.get("windspeed_10m", [])
+        windgusts = hourly.get("windgusts_10m", [])
+
+        rows: list[dict] = []
+        for index, time_value in enumerate(times):
+            try:
+                dt = datetime.fromisoformat(time_value).replace(tzinfo=tz)
+            except ValueError:
+                continue
+            if dt < hour_floor:
+                continue
+            rows.append(
+                {
+                    "time": dt.strftime("%Y-%m-%d %H:%M"),
+                    "temperature_2m": temperatures[index] if index < len(temperatures) else None,
+                    "precipitation": precipitation[index] if index < len(precipitation) else None,
+                    "windspeed_10m": windspeed[index] if index < len(windspeed) else None,
+                    "windgusts_10m": windgusts[index] if index < len(windgusts) else None,
+                }
+            )
+            if len(rows) >= effective_hours:
+                break
+
+        if not rows:
+            logger.error("No forecast rows found for next %s hours", window_hours)
+            raise HTTPException(status_code=502, detail="No forecast data available for requested window")
+
+        result = {
+            "city": location.name,
+            "timezone": timezone_name,
+            "window_hours": window_hours,
+            "effective_hours": effective_hours,
+            "generated_at": now_local.strftime("%Y-%m-%d %H:%M"),
+            "hours": rows,
+        }
+        fetch_observation.update(
+            output={
+                "window_hours": window_hours,
+                "effective_hours": effective_hours,
+                "rows_count": len(rows),
+                "timezone": timezone_name,
+                "weather_data": result,
+            }
+        )
+        return result
+
+
+async def generate_next_hours_answer(window_hours: int) -> str:
+    weather_data = await fetch_next_hours_weather_data(window_hours)
+    weather_data_payload = json.dumps(weather_data, indent=2)
+    current_datetime = datetime.now().strftime("%Y-%m-%d %H")
+
+    with start_observation(
+        name="next-hours-answer",
+        as_type="generation",
+        metadata={"baml_function": "GenerateNextHoursBrief"},
+    ) as answer_observation:
+        answer = b.GenerateNextHoursBrief(
+            weather_data["city"],
+            current_datetime,
+            weather_data["effective_hours"],
+            weather_data_payload,
+            baml_options={"collector": collector},
+        )
+        update_observation_from_last_call(
+            answer_observation,
+            {"answer": answer.answer, "window_hours": window_hours},
+        )
+        return answer.answer
+
+
+async def sync_discord_application_commands() -> None:
+    discord_bot_token = get_discord_bot_token()
+    discord_application_id = get_discord_application_id()
+    discord_guild_id = get_discord_guild_id()
+    if not discord_bot_token or not discord_application_id or not discord_guild_id:
+        logger.info(
+            "Skipping Discord command sync (missing DISCORD_BOT_TOKEN or DISCORD_APPLICATION_ID or DISCORD_GUILD_ID)"
+        )
+        return
+
+    commands_url = f"https://discord.com/api/v10/applications/{discord_application_id}/guilds/{discord_guild_id}/commands"
+    # Setting up the commands for discord users
+    command_payload = [
+        {
+            "name": "2_hours",
+            "description": "Get weather for the next 2 hours in Copenhagen",
+            "type": 1,
+        },
+        {
+            "name": "4_hours",
+            "description": "Get weather for the next 4 hours in Copenhagen",
+            "type": 1,
+        },
+    ]
+    headers = {
+        "Authorization": f"Bot {discord_bot_token}",
+        "Content-Type": "application/json",
+    }
+
+    with start_observation(
+        name="discord-command-sync",
+        as_type="span",
+        input={"commands": [command["name"] for command in command_payload]},
+        metadata={"discord_application_id": discord_application_id},
+    ) as command_sync_observation:
+        async with httpx.AsyncClient() as client:
+            response = await client.put(commands_url, headers=headers, json=command_payload)
+            if response.status_code >= 400:
+                logger.error(
+                    "Discord command sync failed with %s: %s",
+                    response.status_code,
+                    response.text,
+                )
+                command_sync_observation.update(
+                    output={
+                        "status": "error",
+                        "status_code": response.status_code,
+                        "response": response.text,
+                    }
+                )
+                raise HTTPException(
+                    status_code=502,
+                    detail="Failed to sync Discord application commands",
+                )
+
+        logger.info("Discord commands synced: /2_hours, /4_hours")
+        command_sync_observation.update(
+            output={"status": "ok", "status_code": response.status_code}
+        )
+
+
+async def post_discord_interaction_followup(
+    application_id: str,
+    interaction_token: str,
+    content: str,
+) -> None:
+    followup_url = f"https://discord.com/api/v10/webhooks/{application_id}/{interaction_token}"
+    payload = {
+        "content": content if len(content) <= 2000 else f"{content[:1997]}...",
+        "flags": 64,
+    }
+
+    with start_observation(
+        name="discord-followup-post",
+        as_type="span",
+        input={"has_application_id": bool(application_id), "payload_flags": payload["flags"]},
+    ) as followup_observation:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(followup_url, json=payload)
+            if response.status_code >= 400:
+                logger.error(
+                    "Discord follow-up returned %s: %s",
+                    response.status_code,
+                    response.text,
+                )
+                followup_observation.update(
+                    output={
+                        "status": "error",
+                        "status_code": response.status_code,
+                        "response": response.text,
+                    }
+                )
+                raise HTTPException(status_code=502, detail="Failed to deliver deferred Discord response")
+            followup_observation.update(
+                output={"status": "ok", "status_code": response.status_code}
+            )
+
+
+async def process_discord_deferred_command(
+    application_id: str,
+    interaction_token: str,
+    window_hours: int,
+    command_name: str,
+    guild_id: str | None,
+    user_id: str | None,
+) -> None:
+    with start_observation(
+        name="discord-deferred-command",
+        as_type="span",
+        input={"command_name": command_name, "window_hours": window_hours},
+        metadata={"guild_id": guild_id, "user_id": user_id},
+    ) as deferred_observation:
+        try:
+            answer = await generate_next_hours_answer(window_hours)
+            await post_discord_interaction_followup(
+                application_id=application_id,
+                interaction_token=interaction_token,
+                content=answer,
+            )
+            deferred_observation.update(
+                output={"status": "ok", "command_name": command_name, "window_hours": window_hours}
+            )
+        except Exception as exc:
+            logger.error("Failed deferred Discord command %s: %s", command_name, str(exc))
+            try:
+                await post_discord_interaction_followup(
+                    application_id=application_id,
+                    interaction_token=interaction_token,
+                    content="Could not generate your weather update right now. Please try again.",
+                )
+            except Exception as followup_exc:
+                logger.error("Failed sending deferred Discord error follow-up: %s", str(followup_exc))
+            deferred_observation.update(
+                output={
+                    "status": "error",
+                    "command_name": command_name,
+                    "window_hours": window_hours,
+                    "error": str(exc),
+                }
+            )
+
+
 def build_discord_embed(content: str) -> dict:
     pattern = re.compile(r"(Temperatures|Precipitation|Wind|Air Quality|Practical advice|Overall)\s*[—-]\s*", re.IGNORECASE)
     matches = list(pattern.finditer(content))
@@ -494,3 +766,26 @@ def validate_cron_token(x_cron_token: str | None) -> None:
 
     if x_cron_token != cron_shared_secret:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def validate_discord_signature(
+    x_signature_ed25519: str | None,
+    x_signature_timestamp: str | None,
+    raw_body: bytes,
+) -> None:
+    discord_public_key = get_discord_public_key()
+    if not discord_public_key:
+        logger.error("Missing DISCORD_PUBLIC_KEY")
+        raise HTTPException(status_code=500, detail="DISCORD_PUBLIC_KEY is not configured")
+
+    if not x_signature_ed25519 or not x_signature_timestamp:
+        raise HTTPException(status_code=401, detail="Missing Discord signature headers")
+
+    try:
+        verify_key = VerifyKey(bytes.fromhex(discord_public_key))
+        signature = bytes.fromhex(x_signature_ed25519)
+        signed_message = x_signature_timestamp.encode("utf-8") + raw_body
+        verify_key.verify(signed_message, signature)
+    except (ValueError, BadSignatureError) as exc:
+        logger.warning("Invalid Discord interaction signature: %s", str(exc))
+        raise HTTPException(status_code=401, detail="Invalid request signature")

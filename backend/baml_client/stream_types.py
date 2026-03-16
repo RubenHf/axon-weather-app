@@ -23,10 +23,13 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (3)
+# Generated classes (4)
 # #########################################################################
 
 class DailyBriefAnswer(BaseModel):
+    answer: typing.Optional[str] = None
+
+class NextHoursBriefAnswer(BaseModel):
     answer: typing.Optional[str] = None
 
 class OpenMeteoHistoricalRequest(BaseModel):
