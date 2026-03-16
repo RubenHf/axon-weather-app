@@ -20,7 +20,7 @@ from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIM
 class TypeBuilder(type_builder.TypeBuilder):
     def __init__(self):
         super().__init__(classes=set(
-          ["DailyBriefAnswer","OpenMeteoHistoricalRequest","WeatherAnswer",]
+          ["DailyBriefAnswer","NextHoursBriefAnswer","OpenMeteoHistoricalRequest","WeatherAnswer",]
         ), enums=set(
           []
         ), runtime=DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
@@ -31,12 +31,16 @@ class TypeBuilder(type_builder.TypeBuilder):
 
 
     # #########################################################################
-    # Generated classes 3
+    # Generated classes 4
     # #########################################################################
 
     @property
     def DailyBriefAnswer(self) -> "DailyBriefAnswerViewer":
         return DailyBriefAnswerViewer(self)
+
+    @property
+    def NextHoursBriefAnswer(self) -> "NextHoursBriefAnswerViewer":
+        return NextHoursBriefAnswerViewer(self)
 
     @property
     def OpenMeteoHistoricalRequest(self) -> "OpenMeteoHistoricalRequestViewer":
@@ -54,7 +58,7 @@ class TypeBuilder(type_builder.TypeBuilder):
 
 
 # #########################################################################
-# Generated classes 3
+# Generated classes 4
 # #########################################################################
 
 class DailyBriefAnswerAst:
@@ -83,6 +87,45 @@ class DailyBriefAnswerViewer(DailyBriefAnswerAst):
 
 
 class DailyBriefAnswerProperties:
+    def __init__(self, bldr: baml_py.ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = bldr
+        self.__properties = properties # type: ignore (we know how to use this private attribute) # noqa: F821
+
+    
+    
+    @property
+    def answer(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("answer"))
+    
+    
+
+
+class NextHoursBriefAnswerAst:
+    def __init__(self, tb: type_builder.TypeBuilder):
+        _tb = tb._tb # type: ignore (we know how to use this private attribute)
+        self._bldr = _tb.class_("NextHoursBriefAnswer")
+        self._properties: typing.Set[str] = set([  "answer",  ])
+        self._props = NextHoursBriefAnswerProperties(self._bldr, self._properties)
+
+    def type(self) -> baml_py.FieldType:
+        return self._bldr.field()
+
+    @property
+    def props(self) -> "NextHoursBriefAnswerProperties":
+        return self._props
+
+
+class NextHoursBriefAnswerViewer(NextHoursBriefAnswerAst):
+    def __init__(self, tb: type_builder.TypeBuilder):
+        super().__init__(tb)
+
+    
+    def list_properties(self) -> typing.List[typing.Tuple[str, type_builder.ClassPropertyViewer]]:
+        return [(name, type_builder.ClassPropertyViewer(self._bldr.property(name))) for name in self._properties]
+    
+
+
+class NextHoursBriefAnswerProperties:
     def __init__(self, bldr: baml_py.ClassBuilder, properties: typing.Set[str]):
         self.__bldr = bldr
         self.__properties = properties # type: ignore (we know how to use this private attribute) # noqa: F821

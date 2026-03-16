@@ -41,10 +41,13 @@ def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
 # #########################################################################
 
 # #########################################################################
-# Generated classes (3)
+# Generated classes (4)
 # #########################################################################
 
 class DailyBriefAnswer(BaseModel):
+    answer: str
+
+class NextHoursBriefAnswer(BaseModel):
     answer: str
 
 class OpenMeteoHistoricalRequest(BaseModel):

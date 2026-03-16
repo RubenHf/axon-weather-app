@@ -19,6 +19,9 @@ type_map = {
     "types.DailyBriefAnswer": types.DailyBriefAnswer,
     "stream_types.DailyBriefAnswer": stream_types.DailyBriefAnswer,
 
+    "types.NextHoursBriefAnswer": types.NextHoursBriefAnswer,
+    "stream_types.NextHoursBriefAnswer": stream_types.NextHoursBriefAnswer,
+
     "types.OpenMeteoHistoricalRequest": types.OpenMeteoHistoricalRequest,
     "stream_types.OpenMeteoHistoricalRequest": stream_types.OpenMeteoHistoricalRequest,
 

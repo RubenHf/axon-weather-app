@@ -136,6 +136,20 @@ class BamlSyncClient:
                 "city": city,"datetime": datetime,"daily_data": daily_data,
             })
             return typing.cast(types.DailyBriefAnswer, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    def GenerateNextHoursBrief(self, city: str,datetime: str,window_hours: int,hourly_data: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.NextHoursBriefAnswer:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            __stream__ = self.stream.GenerateNextHoursBrief(city=city,datetime=datetime,window_hours=window_hours,hourly_data=hourly_data,
+                baml_options=baml_options)
+            return __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="GenerateNextHoursBrief", args={
+                "city": city,"datetime": datetime,"window_hours": window_hours,"hourly_data": hourly_data,
+            })
+            return typing.cast(types.NextHoursBriefAnswer, __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -181,6 +195,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.DailyBriefAnswer, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
+    def GenerateNextHoursBrief(self, city: str,datetime: str,window_hours: int,hourly_data: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[stream_types.NextHoursBriefAnswer, types.NextHoursBriefAnswer]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="GenerateNextHoursBrief", args={
+            "city": city,"datetime": datetime,"window_hours": window_hours,"hourly_data": hourly_data,
+        })
+        return baml_py.BamlSyncStream[stream_types.NextHoursBriefAnswer, types.NextHoursBriefAnswer](
+          __result__,
+          lambda x: typing.cast(stream_types.NextHoursBriefAnswer, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.NextHoursBriefAnswer, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
     
 
 class BamlHttpRequestClient:
@@ -210,6 +236,13 @@ class BamlHttpRequestClient:
             "city": city,"datetime": datetime,"daily_data": daily_data,
         }, mode="request")
         return __result__
+    def GenerateNextHoursBrief(self, city: str,datetime: str,window_hours: int,hourly_data: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="GenerateNextHoursBrief", args={
+            "city": city,"datetime": datetime,"window_hours": window_hours,"hourly_data": hourly_data,
+        }, mode="request")
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -237,6 +270,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="GenerateDailyBrief", args={
             "city": city,"datetime": datetime,"daily_data": daily_data,
+        }, mode="stream")
+        return __result__
+    def GenerateNextHoursBrief(self, city: str,datetime: str,window_hours: int,hourly_data: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="GenerateNextHoursBrief", args={
+            "city": city,"datetime": datetime,"window_hours": window_hours,"hourly_data": hourly_data,
         }, mode="stream")
         return __result__
     
