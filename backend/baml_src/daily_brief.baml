@@ -4,6 +4,10 @@ class DailyBriefAnswer {
   answer string
 }
 
+class NextHoursBriefAnswer {
+  answer string
+}
+
 function GenerateDailyBrief(city: string, datetime: string, daily_data: string) -> DailyBriefAnswer {
   client CustomGPT5Mini
   prompt #"
@@ -43,6 +47,36 @@ function GenerateDailyBrief(city: string, datetime: string, daily_data: string) 
     Current Datetime: {{ datetime }}
     Daily Data:
     {{ daily_data }}
+
+    {{ ctx.output_format }}
+  "#
+}
+
+function GenerateNextHoursBrief(city: string, datetime: string, window_hours: int, hourly_data: string) -> NextHoursBriefAnswer {
+  client CustomGPT5Mini
+  prompt #"
+    You are a practical weather reporter for {{ city }}.
+
+    You will receive a short JSON payload in `hourly_data` for the next {{ window_hours }} effective hours.
+    Treat this data as the source of truth.
+
+    The report must focus only on:
+    - temperature (C),
+    - wind (windspeed and gusts),
+    - precipitation (mm).
+
+    Requirements:
+    1) Output plain text only.
+    2) Write a short mini-report in 4-6 sentences.
+    3) Describe the hour-by-hour evolution in the upcoming period, not just a summary.
+    4) Explicitly mention when rain starts/stops or intensifies, when wind picks up/eases, and how temperature changes.
+    5) Include concrete values and times from the data.
+    6) End with a concise practical takeaway for someone deciding when to go out.
+    7) Do not mention any metric not present in the input.
+
+    Current Datetime: {{ datetime }}
+    Hourly Data:
+    {{ hourly_data }}
 
     {{ ctx.output_format }}
   "#

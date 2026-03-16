@@ -25,6 +25,22 @@ def get_discord_webhook_url() -> str | None:
     return os.getenv("DISCORD_WEBHOOK_URL")
 
 
+def get_discord_public_key() -> str | None:
+    return os.getenv("DISCORD_PUBLIC_KEY")
+
+
+def get_discord_bot_token() -> str | None:
+    return os.getenv("DISCORD_BOT_TOKEN")
+
+
+def get_discord_application_id() -> str | None:
+    return os.getenv("DISCORD_APPLICATION_ID")
+
+
+def get_discord_guild_id() -> str | None:
+    return os.getenv("DISCORD_GUILD_ID")
+
+
 def get_cron_shared_secret() -> str | None:
     return os.getenv("CRON_SHARED_SECRET")
 
