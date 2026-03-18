@@ -560,6 +560,20 @@ async def sync_discord_application_commands() -> None:
             "description": "Get weather for the next 4 hours in Copenhagen",
             "type": 1,
         },
+        {
+            "name": "weather",
+            "description": "Get weather for a specific question",
+            "type": 1,
+            "options": [
+                {
+                    "type": 3,
+                    "name": "question",
+                    "description": "Your weather question",
+                    "required": True,
+                    "max_length": 400,
+                }
+            ],
+        },
     ]
     headers = {
         "Authorization": f"Bot {discord_bot_token}",
@@ -592,7 +606,7 @@ async def sync_discord_application_commands() -> None:
                     detail="Failed to sync Discord application commands",
                 )
 
-        logger.info("Discord commands synced: /2_hours, /4_hours")
+        logger.info("Discord commands synced: /2_hours, /4_hours, /weather")
         command_sync_observation.update(
             output={"status": "ok", "status_code": response.status_code}
         )
@@ -674,6 +688,50 @@ async def process_discord_deferred_command(
                     "status": "error",
                     "command_name": command_name,
                     "window_hours": window_hours,
+                    "error": str(exc),
+                }
+            )
+
+
+async def process_discord_weather_question(
+    application_id: str,
+    interaction_token: str,
+    weather_request: WeatherRequest,
+    command_name: str,
+    guild_id: str | None,
+    user_id: str | None,
+) -> None:
+    with start_observation(
+        name="discord-weather-command",
+        as_type="span",
+        input={"command_name": command_name, "question": weather_request.question},
+        metadata={"guild_id": guild_id, "user_id": user_id},
+    ) as weather_observation:
+        try:
+            answer = await generate_weather_answer(weather_request)
+            await post_discord_interaction_followup(
+                application_id=application_id,
+                interaction_token=interaction_token,
+                content=answer,
+            )
+            weather_observation.update(
+                output={"status": "ok", "command_name": command_name}
+            )
+        except Exception as exc:
+            logger.error("Failed Discord weather command %s: %s", command_name, str(exc))
+            try:
+                await post_discord_interaction_followup(
+                    application_id=application_id,
+                    interaction_token=interaction_token,
+                    content="Could not generate your weather answer right now. Please try again.",
+                )
+            except Exception as followup_exc:
+                logger.error("Failed sending Discord weather error follow-up: %s", str(followup_exc))
+            weather_observation.update(
+                output={
+                    "status": "error",
+                    "command_name": command_name,
+                    "question": weather_request.question,
                     "error": str(exc),
                 }
             )

@@ -17,6 +17,14 @@ client<llm> CustomGPT5Mini {
     api_key env.OPENAI_API_KEY
   }
 }
+client<llm> CustomGPT5_4_Nano {
+  provider openai-responses
+  retry_policy Exponential
+  options {
+    model "gpt-5.4-nano"
+    api_key env.OPENAI_API_KEY
+  }
+}
 
 // Openai with chat completion
 client<llm> CustomGPT5Chat {
