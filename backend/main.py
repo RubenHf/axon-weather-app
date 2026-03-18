@@ -6,6 +6,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .functions import (
     process_discord_deferred_command,
+    process_discord_weather_question,
     generate_daily_copenhagen_answer,
     generate_weather_answer,
     send_to_discord,
@@ -16,7 +17,7 @@ from .functions import (
 
 from .models import WeatherRequest, WeatherResponse
 from .observability import shutdown_observability, start_observation, with_trace_attributes
-from .settings import ALLOWED_ORIGINS, DEV_TAG
+from .settings import ALLOWED_ORIGINS, DEFAULT_DAILY_LOCATION, DEV_TAG
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,10 +29,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def app_lifespan(_: FastAPI):
     # Syncing the Discord application commands on startup when needed
-    # try:
-    #     await sync_discord_application_commands()
-    # except Exception as exc:
-    #     logger.error("Discord command sync failed during startup: %s", str(exc))
+    try:
+        await sync_discord_application_commands()
+    except Exception as exc:
+        logger.error("Discord command sync failed during startup: %s", str(exc))
     yield
     shutdown_observability()
 
@@ -166,12 +167,13 @@ async def handle_discord_interactions(
                     return payload
 
                 hours_by_command = {"2_hours": 2, "4_hours": 4}
-                window_hours = hours_by_command.get(command_name)
-                if window_hours is None:
+                is_hours_command = command_name in hours_by_command
+                is_weather_command = command_name == "weather"
+                if not is_hours_command and not is_weather_command:
                     payload = {
                         "type": 4,
                         "data": {
-                            "content": "Unknown command. Use `/2_hours` or `/4_hours`.",
+                            "content": "Unknown command. Use `/2_hours`, `/4_hours`, or `/weather`.",
                             "flags": 64,
                         },
                     }
@@ -197,11 +199,54 @@ async def handle_discord_interactions(
                     )
                     return payload
 
+                if is_hours_command:
+                    window_hours = hours_by_command[command_name]
+                    background_tasks.add_task(
+                        process_discord_deferred_command,
+                        application_id=application_id,
+                        interaction_token=interaction_token,
+                        window_hours=window_hours,
+                        command_name=command_name,
+                        guild_id=guild_id,
+                        user_id=user_id,
+                    )
+                    route_observation.update(
+                        output={"status": "deferred", "command_name": command_name, "window_hours": window_hours},
+                        metadata={"http_status_code": 200},
+                    )
+                    return {"type": 5, "data": {"flags": 64}}
+
+                options = interaction_data.get("options", [])
+                question = next(
+                    (
+                        option.get("value")
+                        for option in options
+                        if option.get("name") == "question" and isinstance(option.get("value"), str)
+                    ),
+                    "",
+                ).strip()
+                if not question:
+                    payload = {
+                        "type": 4,
+                        "data": {
+                            "content": "Please provide a weather question, e.g. `/weather question:Will it rain today?`",
+                            "flags": 64,
+                        },
+                    }
+                    route_observation.update(
+                        output={"status": "missing_weather_question", "command_name": command_name},
+                        metadata={"http_status_code": 200},
+                    )
+                    return payload
+
                 background_tasks.add_task(
-                    process_discord_deferred_command,
+                    process_discord_weather_question,
                     application_id=application_id,
                     interaction_token=interaction_token,
-                    window_hours=window_hours,
+                    weather_request=WeatherRequest(
+                        question=question,
+                        location=DEFAULT_DAILY_LOCATION,
+                    ),
                     command_name=command_name,
                     guild_id=guild_id,
                     user_id=user_id,
@@ -209,7 +254,7 @@ async def handle_discord_interactions(
 
                 payload = {"type": 5, "data": {"flags": 64}}
                 route_observation.update(
-                    output={"status": "deferred", "command_name": command_name, "window_hours": window_hours},
+                    output={"status": "deferred", "command_name": command_name, "question": question},
                     metadata={"http_status_code": 200},
                 )
                 return payload
