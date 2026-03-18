@@ -24,6 +24,7 @@ function GenerateDailyBrief(city: string, datetime: string, daily_data: string) 
         - time: list of HH:MM timestamps (3-hour cadence)
         - temp: temperatures in C
         - wind: wind speed values
+        - wind_direction: wind direction labels ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
         - gusts: gust speed values
         - rain: categorical rain labels ("dry", "drizzle", "light rain", "moderate rain", "heavy rain")
         - weathercode: sky-condition labels ("clear", "mostly clear", "partly cloudy", "overcast")
@@ -62,14 +63,14 @@ function GenerateNextHoursBrief(city: string, datetime: string, window_hours: in
 
     The report must focus only on:
     - temperature (C),
-    - wind (windspeed and gusts),
+    - wind (windspeed, wind direction and gusts),
     - precipitation (mm).
 
     Requirements:
     1) Output plain text only.
     2) Write a short mini-report in 4-6 sentences.
     3) Describe the hour-by-hour evolution in the upcoming period, not just a summary.
-    4) Explicitly mention when rain starts/stops or intensifies, when wind picks up/eases, and how temperature changes.
+    4) Explicitly mention when rain starts/stops or intensifies, when wind picks up/eases, general wind direction, and how temperature changes.
     5) Include concrete values and times from the data.
     6) End with a concise practical takeaway for someone deciding when to go out.
     7) Do not mention any metric not present in the input.

@@ -219,6 +219,32 @@ async def generate_weather_answer(request: WeatherRequest) -> str:
         )
         return answer.answer
 
+def classify_wind_direction(degrees: float, sectors: int = 8) -> str | None:
+    """
+    Convert wind direction in degrees to compass direction (8/16-point).
+    """
+    if degrees is None:
+        return None
+
+    if sectors == 16:
+        directions = [
+            "N", "NNE", "NE", "ENE",
+            "E", "ESE", "SE", "SSE",
+            "S", "SSW", "SW", "WSW",
+            "W", "WNW", "NW", "NNW"
+        ]
+        # Each sector is 22.5°
+        index = int((degrees + 11.25) % 360 / 22.5)
+    else:
+        directions = [
+            "N", "NE", "E", "SE",
+            "S", "SW", "W", "NW"
+        ]
+
+        # Each sector is 45°
+        index = int((degrees + 22.5) % 360 / 45)
+    return directions[index]
+
 def reduce_hourly_data(data: dict) -> dict:
     try: 
         indices = range(0, 24, 3)
@@ -268,6 +294,7 @@ def reduce_hourly_data(data: dict) -> dict:
             "time": [data["hourly"]["time"][i].split("T")[1] for i in indices],
             "temp": [data["hourly"]["temperature_2m"][i] for i in indices],
             "wind": [data["hourly"]["windspeed_10m"][i] for i in indices],
+            "wind_direction": [classify_wind_direction(sum(data["hourly"]["wind_direction_10m"][i: i+3]) / len(data["hourly"]["wind_direction_10m"][i: i+3])) for i in indices],
             "gusts": [data["hourly"]["windgusts_10m"][i] for i in indices],
             "rain": [classify_rain(max(data["hourly"]["precipitation"][i: i+3])) for i in indices],
             "weathercode": [WMO.get(data["hourly"]["weathercode"][i], "unknown") for i in indices],
@@ -295,6 +322,7 @@ async def generate_daily_copenhagen_answer() -> str:
             "windspeed_10m",
             "windgusts_10m",
             "weathercode",
+            "wind_direction_10m",
         ],
     }
     air_quality_plan = {
@@ -438,6 +466,7 @@ async def fetch_next_hours_weather_data(window_hours: int) -> dict:
             "precipitation",
             "windspeed_10m",
             "windgusts_10m",
+            "wind_direction_10m",
         ],
         "forecast_days": 2,
         "timezone": "auto",
@@ -468,7 +497,7 @@ async def fetch_next_hours_weather_data(window_hours: int) -> dict:
         precipitation = hourly.get("precipitation", [])
         windspeed = hourly.get("windspeed_10m", [])
         windgusts = hourly.get("windgusts_10m", [])
-
+        wind_direction = hourly.get("wind_direction_10m", [])
         rows: list[dict] = []
         for index, time_value in enumerate(times):
             try:
@@ -484,6 +513,7 @@ async def fetch_next_hours_weather_data(window_hours: int) -> dict:
                     "precipitation": precipitation[index] if index < len(precipitation) else None,
                     "windspeed_10m": windspeed[index] if index < len(windspeed) else None,
                     "windgusts_10m": windgusts[index] if index < len(windgusts) else None,
+                    "wind_direction_10m": classify_wind_direction(wind_direction[index]) if index < len(wind_direction) else None,
                 }
             )
             if len(rows) >= effective_hours:
