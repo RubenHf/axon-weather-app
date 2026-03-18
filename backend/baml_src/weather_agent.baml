@@ -7,7 +7,7 @@ class WeatherAnswer {
 }
 
 function AnswerWeatherQuestion(question: string, city: string, datetime: string, api_response: string) -> WeatherAnswer {
-  client CustomGPT5Mini
+  client CustomGPT5_4_Nano
   prompt #"
     You are a weather expert analyzing API data to answer user questions about weather conditions in the city {{ city }}.
 

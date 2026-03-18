@@ -9,7 +9,7 @@ class NextHoursBriefAnswer {
 }
 
 function GenerateDailyBrief(city: string, datetime: string, daily_data: string) -> DailyBriefAnswer {
-  client CustomGPT5Mini
+  client CustomGPT5_4_Nano
   prompt #"
     You are a practical morning weather editor writing a daily brief for {{ city }}.
 
@@ -53,7 +53,7 @@ function GenerateDailyBrief(city: string, datetime: string, daily_data: string) 
 }
 
 function GenerateNextHoursBrief(city: string, datetime: string, window_hours: int, hourly_data: string) -> NextHoursBriefAnswer {
-  client CustomGPT5Mini
+  client CustomGPT5_4_Nano
   prompt #"
     You are a practical weather reporter for {{ city }}.
 
