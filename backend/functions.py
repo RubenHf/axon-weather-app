@@ -1,13 +1,13 @@
 from datetime import datetime, timezone
 import json
 import logging
-import re
 from zoneinfo import ZoneInfo
 
 import httpx
 from nacl.exceptions import BadSignatureError
 from nacl.signing import VerifyKey
 from .baml_client import b
+from .baml_client.types import DailyBriefAnswer
 from baml_py import Collector
 from fastapi import HTTPException
 
@@ -304,7 +304,7 @@ def reduce_hourly_data(data: dict) -> dict:
         logger.error("Error reducing hourly data: %s", e)
         return data
 
-async def generate_daily_copenhagen_answer() -> str:
+async def generate_daily_copenhagen_answer() -> DailyBriefAnswer:
     location = DEFAULT_DAILY_LOCATION
     today = datetime.now().strftime("%Y-%m-%d")
     fixed_plan = {
@@ -446,10 +446,10 @@ async def generate_daily_copenhagen_answer() -> str:
         )
         update_observation_from_last_call(
             daily_answer_observation,
-            {"answer": answer.answer},
+            {"brief": answer.model_dump()},
         )
 
-        return answer.answer
+        return answer
 
 
 async def fetch_next_hours_weather_data(window_hours: int) -> dict:
@@ -767,43 +767,76 @@ async def process_discord_weather_question(
             )
 
 
-def build_discord_embed(content: str) -> dict:
-    pattern = re.compile(r"(Temperatures|Precipitation|Wind|Air Quality|Practical advice|Overall)\s*[—-]\s*", re.IGNORECASE)
-    matches = list(pattern.finditer(content))
-    fields: list[dict[str, str | bool]] = []
+DISCORD_EMBED_FIELD_VALUE_MAX = 1024
+DISCORD_EMBED_DESCRIPTION_MAX = 4096
+DISCORD_EMBED_FIELDS_MAX = 25
 
-    if matches:
-        for index, match in enumerate(matches):
-            label = match.group(1).strip().title()
-            section_start = match.end()
-            section_end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
-            section_text = content[section_start:section_end].strip().strip(".")
-            if section_text:
-                fields.append(
-                    {
-                        "name": label,
-                        "value": section_text[:1024],
-                        "inline": False,
-                    }
-                )
+# Display label and DailyBriefAnswer attribute name (structured LLM output).
+DAILY_BRIEF_EMBED_SECTIONS: list[tuple[str, str]] = [
+    ("Temperatures", "temperatures"),
+    ("Precipitation", "precipitation"),
+    ("Wind", "wind"),
+    ("Air Quality", "air_quality"),
+    ("Practical advice", "practical_advice"),
+    ("Overall", "overall"),
+]
 
+
+def format_daily_brief_plain_text(brief: DailyBriefAnswer) -> str:
+    """Human-readable brief for API responses and embed fallbacks."""
+    parts: list[str] = []
+    for label, attr in DAILY_BRIEF_EMBED_SECTIONS:
+        text = getattr(brief, attr, "").strip()
+        if text:
+            parts.append(f"{label}\n{text}")
+    return "\n\n".join(parts)
+
+
+def _truncate_discord_field_value(text: str) -> str:
+    stripped = text.strip()
+    if len(stripped) <= DISCORD_EMBED_FIELD_VALUE_MAX:
+        return stripped
+    return stripped[: DISCORD_EMBED_FIELD_VALUE_MAX - 1] + "…"
+
+
+def build_discord_embed(brief: DailyBriefAnswer) -> dict:
+    """
+    Build a Discord embed from structured daily brief fields (no regex parsing).
+    If every section is empty, use a single description with a safe fallback message.
+    """
     embed: dict = {
         "title": "Morning Briefing - Copenhagen",
         "color": 3447003,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
+    fields: list[dict[str, str | bool]] = []
+    for label, attr in DAILY_BRIEF_EMBED_SECTIONS:
+        text = getattr(brief, attr, "").strip()
+        if text:
+            fields.append(
+                {
+                    "name": label,
+                    "value": _truncate_discord_field_value(text),
+                    "inline": False,
+                }
+            )
+
     if fields:
-        embed["fields"] = fields[:5]
+        embed["fields"] = fields[:DISCORD_EMBED_FIELDS_MAX]
     else:
-        embed["description"] = content[:4096]
+        plain = format_daily_brief_plain_text(brief)
+        description = (
+            plain if plain.strip() else "The daily brief could not be generated with valid sections."
+        )
+        embed["description"] = description[:DISCORD_EMBED_DESCRIPTION_MAX]
 
     return embed
 
 
-async def send_to_discord(content: str) -> None:
+async def send_to_discord(brief: DailyBriefAnswer) -> None:
     discord_webhook_url = get_discord_webhook_url()
-    embed = build_discord_embed(content)
+    embed = build_discord_embed(brief)
     with start_observation(
         name="discord-webhook-post",
         as_type="span",

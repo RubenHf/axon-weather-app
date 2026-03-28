@@ -31,7 +31,7 @@ async def app_lifespan(_: FastAPI):
     shutdown_observability()
 
 
-app = FastAPI(docs_url=None, redoc_url=None, lifespan=app_lifespan)
+app = FastAPI(docs_url="/docs", redoc_url=None, lifespan=app_lifespan)
 
 app.include_router(discord.router)
 app.add_middleware(

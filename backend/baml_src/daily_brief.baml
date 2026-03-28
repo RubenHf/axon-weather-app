@@ -1,7 +1,12 @@
 // Dedicated BAML function for the daily Copenhagen weather briefing.
 
 class DailyBriefAnswer {
-  answer string
+  temperatures string
+  precipitation string
+  wind string
+  air_quality string @description("Short summary of the air quality")
+  practical_advice string
+  overall string
 }
 
 class NextHoursBriefAnswer {
@@ -30,20 +35,13 @@ function GenerateDailyBrief(city: string, datetime: string, daily_data: string) 
         - weathercode: sky-condition labels ("clear", "mostly clear", "partly cloudy", "overcast")
         - optional peak values: pm10, pm2_5, dust, max_uv_index
 
-    Requirements:
-    1) Output plain text only (no markdown bullets, no code block, no JSON).
-    2) Use these section labels exactly once and in this exact order:
-       Temperatures
-       Precipitation
-       Wind
-       Air Quality
-       Practical advice
-       Overall
-    3) Keep the full brief concise and useful for a morning read.
-    4) Use concrete values from the data when relevant.
-    5) Do not invent missing values. If a metric is missing, say it is unavailable.
-    6) In "Practical advice", give actionable guidance for clothing, commute, and outdoor activity.
-    7) In "Overall", provide a one-sentence bottom line.
+    Fill each output field with plain prose only (no markdown, no bullet lists, no code blocks, no JSON).
+    Do not repeat section titles inside the field text; the UI will show labels separately.
+    Keep each section concise and useful for a morning read.
+    Use concrete values from the data when relevant.
+    Do not invent missing values. If a metric is missing, say it is unavailable in that section.
+    In practical_advice, give actionable guidance for clothing, commute, and outdoor activity.
+    In overall, provide a one-sentence bottom line.
 
     Current Datetime: {{ datetime }}
     Daily Data:

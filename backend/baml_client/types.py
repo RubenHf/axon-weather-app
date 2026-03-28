@@ -45,7 +45,12 @@ def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
 # #########################################################################
 
 class DailyBriefAnswer(BaseModel):
-    answer: str
+    temperatures: str
+    precipitation: str
+    wind: str
+    air_quality: str = Field(description='Short summary of the air quality')
+    practical_advice: str
+    overall: str
 
 class NextHoursBriefAnswer(BaseModel):
     answer: str
