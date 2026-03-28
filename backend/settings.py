@@ -21,6 +21,9 @@ DEFAULT_DAILY_LOCATION = Location(
 DEV_TAG = os.getenv("DEV_TAG", "dev")
 
 
+def get_docs_url() -> str | None:
+    return os.getenv("DOCS_URL", None)
+
 def get_discord_webhook_url() -> str | None:
     return os.getenv("DISCORD_WEBHOOK_URL")
 

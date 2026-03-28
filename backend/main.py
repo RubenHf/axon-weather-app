@@ -11,7 +11,7 @@ from .functions import (
 from .models import WeatherRequest, WeatherResponse
 from .routers import discord
 from .observability import shutdown_observability, start_observation, with_trace_attributes
-from .settings import ALLOWED_ORIGINS, DEV_TAG
+from .settings import ALLOWED_ORIGINS, DEV_TAG, get_docs_url
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,7 +31,7 @@ async def app_lifespan(_: FastAPI):
     shutdown_observability()
 
 
-app = FastAPI(docs_url="/docs", redoc_url=None, lifespan=app_lifespan)
+app = FastAPI(docs_url=get_docs_url(), redoc_url=None, lifespan=app_lifespan)
 
 app.include_router(discord.router)
 app.add_middleware(
