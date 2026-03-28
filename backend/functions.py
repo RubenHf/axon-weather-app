@@ -771,7 +771,6 @@ DISCORD_EMBED_FIELD_VALUE_MAX = 1024
 DISCORD_EMBED_DESCRIPTION_MAX = 4096
 DISCORD_EMBED_FIELDS_MAX = 25
 
-# Display label and DailyBriefAnswer attribute name (structured LLM output).
 DAILY_BRIEF_EMBED_SECTIONS: list[tuple[str, str]] = [
     ("Temperatures", "temperatures"),
     ("Precipitation", "precipitation"),
@@ -800,10 +799,6 @@ def _truncate_discord_field_value(text: str) -> str:
 
 
 def build_discord_embed(brief: DailyBriefAnswer) -> dict:
-    """
-    Build a Discord embed from structured daily brief fields (no regex parsing).
-    If every section is empty, use a single description with a safe fallback message.
-    """
     embed: dict = {
         "title": "Morning Briefing - Copenhagen",
         "color": 3447003,
