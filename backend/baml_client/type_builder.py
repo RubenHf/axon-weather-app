@@ -65,7 +65,7 @@ class DailyBriefAnswerAst:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("DailyBriefAnswer")
-        self._properties: typing.Set[str] = set([  "answer",  ])
+        self._properties: typing.Set[str] = set([  "temperatures",  "precipitation",  "wind",  "air_quality",  "practical_advice",  "overall",  ])
         self._props = DailyBriefAnswerProperties(self._bldr, self._properties)
 
     def type(self) -> baml_py.FieldType:
@@ -94,8 +94,28 @@ class DailyBriefAnswerProperties:
     
     
     @property
-    def answer(self) -> type_builder.ClassPropertyViewer:
-        return type_builder.ClassPropertyViewer(self.__bldr.property("answer"))
+    def temperatures(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("temperatures"))
+    
+    @property
+    def precipitation(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("precipitation"))
+    
+    @property
+    def wind(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("wind"))
+    
+    @property
+    def air_quality(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("air_quality"))
+    
+    @property
+    def practical_advice(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("practical_advice"))
+    
+    @property
+    def overall(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("overall"))
     
     
 

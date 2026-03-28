@@ -27,7 +27,12 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 # #########################################################################
 
 class DailyBriefAnswer(BaseModel):
-    answer: typing.Optional[str] = None
+    temperatures: typing.Optional[str] = None
+    precipitation: typing.Optional[str] = None
+    wind: typing.Optional[str] = None
+    air_quality: typing.Optional[str] = Field(default=None, description='Short summary of the air quality')
+    practical_advice: typing.Optional[str] = None
+    overall: typing.Optional[str] = None
 
 class NextHoursBriefAnswer(BaseModel):
     answer: typing.Optional[str] = None
