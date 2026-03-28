@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from ..functions import (
     process_discord_deferred_command,
     process_discord_weather_question,
+    format_daily_brief_plain_text,
     generate_daily_copenhagen_answer,
     send_to_discord,
     validate_cron_token,
@@ -43,11 +44,12 @@ async def send_daily_weather_to_discord(
         ):
             try:
                 validate_cron_token(x_cron_token)
-                answer = await generate_daily_copenhagen_answer()
-                await send_to_discord(answer)
+                brief = await generate_daily_copenhagen_answer()
+                await send_to_discord(brief)
                 payload = {
                     "status": "sent",
-                    "answer": answer,
+                    "brief": brief.model_dump(),
+                    "answer": format_daily_brief_plain_text(brief),
                 }
                 route_observation.update(output=payload, metadata={"http_status_code": 200})
                 return payload
