@@ -28,9 +28,9 @@ function GenerateDailyBrief(city: string, datetime: string, daily_data: string) 
       * data:
         - time: list of HH:MM timestamps (3-hour cadence)
         - temp: temperatures in C
-        - wind: wind speed values
+        - wind: wind speed values in km/h
         - wind_direction: wind direction labels ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
-        - gusts: gust speed values
+        - gusts: gust speed values in km/h
         - rain: categorical rain labels ("dry", "drizzle", "light rain", "moderate rain", "heavy rain")
         - weathercode: sky-condition labels ("clear", "mostly clear", "partly cloudy", "overcast")
         - optional peak values: pm10, pm2_5, dust, max_uv_index
@@ -61,7 +61,7 @@ function GenerateNextHoursBrief(city: string, datetime: string, window_hours: in
 
     The report must focus only on:
     - temperature (C),
-    - wind (windspeed, wind direction and gusts),
+    - wind (windspeed in km/h, wind direction and gusts in km/h),
     - precipitation (mm).
 
     Requirements:
