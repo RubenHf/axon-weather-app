@@ -1,9 +1,14 @@
 from datetime import datetime, timezone
+import io
 import json
 import logging
 from zoneinfo import ZoneInfo
 
 import httpx
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
 from nacl.exceptions import BadSignatureError
 from nacl.signing import VerifyKey
 from .baml_client import b
@@ -11,7 +16,7 @@ from .baml_client.types import DailyBriefAnswer
 from baml_py import Collector
 from fastapi import HTTPException
 
-from .models import WeatherRequest
+from .models import DailyBriefBundle, WeatherRequest
 from .observability import start_observation
 from .settings import (
     ARCHIVE_WEATHER_ENDPOINT,
@@ -304,7 +309,7 @@ def reduce_hourly_data(data: dict) -> dict:
         logger.error("Error reducing hourly data: %s", e)
         return data
 
-async def generate_daily_copenhagen_answer() -> DailyBriefAnswer:
+async def generate_daily_copenhagen_answer() -> DailyBriefBundle:
     location = DEFAULT_DAILY_LOCATION
     today = datetime.now().strftime("%Y-%m-%d")
     fixed_plan = {
@@ -449,7 +454,9 @@ async def generate_daily_copenhagen_answer() -> DailyBriefAnswer:
             {"brief": answer.model_dump()},
         )
 
-        return answer
+        hourly_series = forecast_data.get("hourly", {}) or {}
+        tz = _safe_timezone(forecast_data.get("timezone"))
+        return DailyBriefBundle(brief=answer, hourly=hourly_series, tz=tz)
 
 
 async def fetch_next_hours_weather_data(window_hours: int) -> dict:
@@ -781,6 +788,82 @@ DAILY_BRIEF_EMBED_SECTIONS: list[tuple[str, str]] = [
 ]
 
 
+def build_daily_weather_chart(
+    hourly: dict,
+    tz: timezone | ZoneInfo,
+    city: str = DEFAULT_DAILY_LOCATION.name,
+) -> bytes:
+    """Render a 24h temperature line + precipitation bar PNG for today (local tz)."""
+    times = hourly.get("time", []) or []
+    temperatures = hourly.get("temperature_2m", []) or []
+    precipitation = hourly.get("precipitation", []) or []
+
+    today_local = datetime.now(tz=tz).date()
+    hours: list[datetime] = []
+    temps: list[float | None] = []
+    rains: list[float] = []
+    for index, time_value in enumerate(times):
+        try:
+            dt = datetime.fromisoformat(time_value).replace(tzinfo=tz)
+        except (ValueError, TypeError):
+            continue
+        if dt.date() != today_local:
+            continue
+        hours.append(dt)
+        temp_value = temperatures[index] if index < len(temperatures) else None
+        temps.append(temp_value)
+        rain_value = precipitation[index] if index < len(precipitation) else 0.0
+        rains.append(rain_value if rain_value is not None else 0.0)
+
+    if not hours:
+        raise ValueError("No hourly rows available for today's local date")
+
+    fig, ax_temp = plt.subplots(figsize=(9, 4.5))
+    ax_rain = ax_temp.twinx()
+
+    ax_rain.bar(
+        hours,
+        rains,
+        width=1.0 / 24.0 * 0.9,
+        align="center",
+        color="#4a90d9",
+        alpha=0.55,
+        label="Precipitation",
+        zorder=1,
+    )
+    ax_temp.plot(
+        hours,
+        temps,
+        color="#e35d6a",
+        marker="o",
+        linewidth=2,
+        label="Temperature",
+        zorder=2,
+    )
+
+    ax_temp.set_title(f"{city} - {today_local.isoformat()}")
+    ax_temp.set_xlabel("Hour (local)")
+    ax_temp.set_ylabel("Temperature (°C)", color="#e35d6a")
+    ax_rain.set_ylabel("Precipitation (mm)", color="#4a90d9")
+    ax_temp.tick_params(axis="y", colors="#e35d6a")
+    ax_rain.tick_params(axis="y", colors="#4a90d9")
+    ax_temp.grid(True, axis="y", linestyle="--", alpha=0.3)
+
+    ax_temp.set_xticks(hours[::3])
+    ax_temp.set_xticklabels([dt.strftime("%H:%M") for dt in hours[::3]], rotation=0)
+
+    rain_max = max(rains) if rains else 0.0
+    ax_rain.set_ylim(0, max(rain_max * 1.2, 1.0))
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    try:
+        fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
+    finally:
+        plt.close(fig)
+    return buf.getvalue()
+
+
 def format_daily_brief_plain_text(brief: DailyBriefAnswer) -> str:
     """Human-readable brief for API responses and embed fallbacks."""
     parts: list[str] = []
@@ -829,14 +912,22 @@ def build_discord_embed(brief: DailyBriefAnswer) -> dict:
     return embed
 
 
-async def send_to_discord(brief: DailyBriefAnswer) -> None:
+async def send_to_discord(
+    brief: DailyBriefAnswer,
+    chart_png: bytes | None = None,
+) -> None:
     discord_webhook_url = get_discord_webhook_url()
     embed = build_discord_embed(brief)
+    chart_filename = "daily_weather.png"
+    if chart_png:
+        embed["image"] = {"url": f"attachment://{chart_filename}"}
+
     with start_observation(
         name="discord-webhook-post",
         as_type="span",
         input={
             "has_discord_webhook_url": bool(discord_webhook_url),
+            "has_chart": bool(chart_png),
             "content": "Daily weather update for Copenhagen",
             "embed": embed,
         },
@@ -848,13 +939,25 @@ async def send_to_discord(brief: DailyBriefAnswer) -> None:
             )
             raise HTTPException(status_code=500, detail="DISCORD_WEBHOOK_URL is not configured")
 
-        payload = {
+        payload: dict = {
             "content": "Daily weather update for Copenhagen",
             "embeds": [embed],
         }
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(discord_webhook_url, json=payload)
+            if chart_png:
+                payload["attachments"] = [{"id": 0, "filename": chart_filename}]
+                multipart_files = {
+                    "files[0]": (chart_filename, chart_png, "image/png"),
+                }
+                multipart_data = {"payload_json": json.dumps(payload)}
+                response = await client.post(
+                    discord_webhook_url,
+                    data=multipart_data,
+                    files=multipart_files,
+                )
+            else:
+                response = await client.post(discord_webhook_url, json=payload)
             if response.status_code >= 400:
                 logger.error(
                     "Discord webhook returned %s: %s",
