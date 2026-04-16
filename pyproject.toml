@@ -8,5 +8,6 @@ dependencies = [
     "baml-py>=0.218.1",
     "fastapi[standard]>=0.128.0",
     "langfuse>=4.0.0",
+    "matplotlib>=3.9.0",
     "pynacl>=1.6.2",
 ]

@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from ..functions import (
+    build_daily_weather_chart,
     process_discord_deferred_command,
     process_discord_weather_question,
     format_daily_brief_plain_text,
@@ -44,12 +45,23 @@ async def send_daily_weather_to_discord(
         ):
             try:
                 validate_cron_token(x_cron_token)
-                brief = await generate_daily_copenhagen_answer()
-                await send_to_discord(brief)
+                bundle = await generate_daily_copenhagen_answer()
+                brief = bundle.brief
+                try:
+                    chart_png: bytes | None = build_daily_weather_chart(
+                        bundle.hourly, bundle.tz
+                    )
+                except Exception as chart_exc:
+                    logger.warning(
+                        f"Failed to render daily weather chart, sending without it: {chart_exc}",
+                    )
+                    chart_png = None
+                await send_to_discord(brief, chart_png=chart_png)
                 payload = {
                     "status": "sent",
                     "brief": brief.model_dump(),
                     "answer": format_daily_brief_plain_text(brief),
+                    "chart_attached": chart_png is not None,
                 }
                 route_observation.update(output=payload, metadata={"http_status_code": 200})
                 return payload
