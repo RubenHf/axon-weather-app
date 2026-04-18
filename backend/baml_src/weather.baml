@@ -10,7 +10,7 @@ class OpenMeteoHistoricalRequest {
 }
 
 function ExtractOpenMeteoHistoricalRequest(question: string, today: string) -> OpenMeteoHistoricalRequest[] {
-  client CustomGPT5_4_Nano
+  client CustomGPT5_4_Mini
   prompt #"
     You extract the parameters needed to call the Open-Meteo Weather API
     to answer a user question. The question can be general and may include relative
