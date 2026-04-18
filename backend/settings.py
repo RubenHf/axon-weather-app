@@ -1,7 +1,15 @@
-from .models import Location
+from __future__ import annotations
+
+import json
+import logging
 import os
+from typing import Any
 
 from dotenv import load_dotenv
+
+from .models import Location
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -42,6 +50,41 @@ def get_discord_application_id() -> str | None:
 
 def get_discord_guild_id() -> str | None:
     return os.getenv("DISCORD_GUILD_ID")
+
+
+def _discord_slash_builtin_ephemeral_defaults() -> dict[str, bool]:
+    return {"2_hours": True, "4_hours": True, "weather": False}
+
+
+def get_discord_slash_ephemeral_defaults() -> dict[str, bool]:
+    raw = os.getenv("DISCORD_SLASH_VISIBILITY_DEFAULTS_JSON")
+    if not raw:
+        return _discord_slash_builtin_ephemeral_defaults()
+    try:
+        parsed: Any = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Invalid DISCORD_SLASH_VISIBILITY_DEFAULTS_JSON; using built-in defaults")
+        return _discord_slash_builtin_ephemeral_defaults()
+    if not isinstance(parsed, dict):
+        return _discord_slash_builtin_ephemeral_defaults()
+    out = _discord_slash_builtin_ephemeral_defaults()
+    for key, value in parsed.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, bool):
+            out[key] = value
+        elif isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ("private", "ephemeral", "true", "1", "yes"):
+                out[key] = True
+            elif lowered in ("public", "channel", "false", "0", "no"):
+                out[key] = False
+    return out
+
+
+def get_discord_slash_reply_ephemeral(command_name: str) -> bool:
+    """Whether the deferred slash reply for this command should be ephemeral (developer config only)."""
+    return get_discord_slash_ephemeral_defaults().get(command_name, True)
 
 
 def get_cron_shared_secret() -> str | None:

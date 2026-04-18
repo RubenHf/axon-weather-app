@@ -608,7 +608,7 @@ async def sync_discord_application_commands() -> None:
                     "description": "Your weather question",
                     "required": True,
                     "max_length": 400,
-                }
+                },
             ],
         },
     ]
@@ -649,27 +649,36 @@ async def sync_discord_application_commands() -> None:
         )
 
 
-async def post_discord_interaction_followup(
+def _discord_interaction_content_payload(content: str) -> dict:
+    text = content if len(content) <= 2000 else f"{content[:1997]}..."
+    return {"content": text}
+
+
+async def patch_discord_interaction_original_message(
     application_id: str,
     interaction_token: str,
     content: str,
+    *,
+    ephemeral: bool = False,
 ) -> None:
-    followup_url = f"https://discord.com/api/v10/webhooks/{application_id}/{interaction_token}"
-    payload = {
-        "content": content if len(content) <= 2000 else f"{content[:1997]}...",
-        "flags": 64,
-    }
+    edit_url = (
+        f"https://discord.com/api/v10/webhooks/{application_id}/{interaction_token}"
+        "/messages/@original"
+    )
+    payload = _discord_interaction_content_payload(content)
+    if ephemeral:
+        payload["flags"] = 64
 
     with start_observation(
-        name="discord-followup-post",
+        name="discord-interaction-patch-original",
         as_type="span",
-        input={"has_application_id": bool(application_id), "payload_flags": payload["flags"]},
+        input={"has_application_id": bool(application_id), "ephemeral": ephemeral},
     ) as followup_observation:
         async with httpx.AsyncClient() as client:
-            response = await client.post(followup_url, json=payload)
+            response = await client.patch(edit_url, json=payload)
             if response.status_code >= 400:
                 logger.error(
-                    "Discord follow-up returned %s: %s",
+                    "Discord interaction PATCH @original returned %s: %s",
                     response.status_code,
                     response.text,
                 )
@@ -680,7 +689,10 @@ async def post_discord_interaction_followup(
                         "response": response.text,
                     }
                 )
-                raise HTTPException(status_code=502, detail="Failed to deliver deferred Discord response")
+                raise HTTPException(
+                    status_code=502,
+                    detail="Failed to complete deferred Discord interaction message",
+                )
             followup_observation.update(
                 output={"status": "ok", "status_code": response.status_code}
             )
@@ -693,19 +705,21 @@ async def process_discord_deferred_command(
     command_name: str,
     guild_id: str | None,
     user_id: str | None,
+    reply_ephemeral: bool,
 ) -> None:
     with start_observation(
         name="discord-deferred-command",
         as_type="span",
         input={"command_name": command_name, "window_hours": window_hours},
-        metadata={"guild_id": guild_id, "user_id": user_id},
+        metadata={"guild_id": guild_id, "user_id": user_id, "reply_ephemeral": reply_ephemeral},
     ) as deferred_observation:
         try:
             answer = await generate_next_hours_answer(window_hours)
-            await post_discord_interaction_followup(
+            await patch_discord_interaction_original_message(
                 application_id=application_id,
                 interaction_token=interaction_token,
                 content=answer,
+                ephemeral=reply_ephemeral,
             )
             deferred_observation.update(
                 output={"status": "ok", "command_name": command_name, "window_hours": window_hours}
@@ -713,10 +727,11 @@ async def process_discord_deferred_command(
         except Exception as exc:
             logger.error("Failed deferred Discord command %s: %s", command_name, str(exc))
             try:
-                await post_discord_interaction_followup(
+                await patch_discord_interaction_original_message(
                     application_id=application_id,
                     interaction_token=interaction_token,
                     content="Could not generate your weather update right now. Please try again.",
+                    ephemeral=reply_ephemeral,
                 )
             except Exception as followup_exc:
                 logger.error("Failed sending deferred Discord error follow-up: %s", str(followup_exc))
@@ -737,19 +752,21 @@ async def process_discord_weather_question(
     command_name: str,
     guild_id: str | None,
     user_id: str | None,
+    reply_ephemeral: bool,
 ) -> None:
     with start_observation(
         name="discord-weather-command",
         as_type="span",
         input={"command_name": command_name, "question": weather_request.question},
-        metadata={"guild_id": guild_id, "user_id": user_id},
+        metadata={"guild_id": guild_id, "user_id": user_id, "reply_ephemeral": reply_ephemeral},
     ) as weather_observation:
         try:
             answer = await generate_weather_answer(weather_request)
-            await post_discord_interaction_followup(
+            await patch_discord_interaction_original_message(
                 application_id=application_id,
                 interaction_token=interaction_token,
                 content=answer,
+                ephemeral=reply_ephemeral,
             )
             weather_observation.update(
                 output={"status": "ok", "command_name": command_name}
@@ -757,10 +774,11 @@ async def process_discord_weather_question(
         except Exception as exc:
             logger.error("Failed Discord weather command %s: %s", command_name, str(exc))
             try:
-                await post_discord_interaction_followup(
+                await patch_discord_interaction_original_message(
                     application_id=application_id,
                     interaction_token=interaction_token,
                     content="Could not generate your weather answer right now. Please try again.",
+                    ephemeral=reply_ephemeral,
                 )
             except Exception as followup_exc:
                 logger.error("Failed sending Discord weather error follow-up: %s", str(followup_exc))
