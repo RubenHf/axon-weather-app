@@ -65,7 +65,7 @@ function GenerateNextHoursBrief(city: string, datetime: string, window_hours: in
     - precipitation (mm).
 
     Requirements:
-    1) Output plain text only.
+    1) Output ENGLISH plain text only.
     2) Write a short mini-report in 4-6 sentences.
     3) Describe the hour-by-hour evolution in the upcoming period, not just a summary.
     4) Explicitly mention when rain starts/stops or intensifies, when wind picks up/eases, general wind direction, and how temperature changes.
