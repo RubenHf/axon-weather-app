@@ -16,9 +16,15 @@ from ..functions import (
 
 from ..models import WeatherRequest
 from ..observability import start_observation, with_trace_attributes
-from ..settings import DEFAULT_DAILY_LOCATION, DEV_TAG
+from ..settings import DEFAULT_DAILY_LOCATION, DEV_TAG, get_discord_slash_reply_ephemeral
 
 logger = logging.getLogger(__name__)
+
+
+def _discord_deferred_interaction_payload(reply_ephemeral: bool) -> dict:
+    if reply_ephemeral:
+        return {"type": 5, "data": {"flags": 64}}
+    return {"type": 5}
 
 
 router = APIRouter(
@@ -158,6 +164,7 @@ async def handle_discord_interactions(
 
                 if is_hours_command:
                     window_hours = hours_by_command[command_name]
+                    reply_ephemeral = get_discord_slash_reply_ephemeral(command_name)
                     background_tasks.add_task(
                         process_discord_deferred_command,
                         application_id=application_id,
@@ -166,14 +173,20 @@ async def handle_discord_interactions(
                         command_name=command_name,
                         guild_id=guild_id,
                         user_id=user_id,
+                        reply_ephemeral=reply_ephemeral,
                     )
                     route_observation.update(
-                        output={"status": "deferred", "command_name": command_name, "window_hours": window_hours},
+                        output={
+                            "status": "deferred",
+                            "command_name": command_name,
+                            "window_hours": window_hours,
+                            "reply_ephemeral": reply_ephemeral,
+                        },
                         metadata={"http_status_code": 200},
                     )
-                    return {"type": 5, "data": {"flags": 64}}
+                    return _discord_deferred_interaction_payload(reply_ephemeral)
 
-                options = interaction_data.get("options", [])
+                options = interaction_data.get("options") or []
                 question = next(
                     (
                         option.get("value")
@@ -196,6 +209,7 @@ async def handle_discord_interactions(
                     )
                     return payload
 
+                reply_ephemeral = get_discord_slash_reply_ephemeral(command_name)
                 background_tasks.add_task(
                     process_discord_weather_question,
                     application_id=application_id,
@@ -207,14 +221,19 @@ async def handle_discord_interactions(
                     command_name=command_name,
                     guild_id=guild_id,
                     user_id=user_id,
+                    reply_ephemeral=reply_ephemeral,
                 )
 
-                payload = {"type": 5, "data": {"flags": 64}}
                 route_observation.update(
-                    output={"status": "deferred", "command_name": command_name, "question": question},
+                    output={
+                        "status": "deferred",
+                        "command_name": command_name,
+                        "question": question,
+                        "reply_ephemeral": reply_ephemeral,
+                    },
                     metadata={"http_status_code": 200},
                 )
-                return payload
+                return _discord_deferred_interaction_payload(reply_ephemeral)
             except Exception as exc:
                 logger.error("Failed to process Discord interaction: %s", str(exc))
                 payload = {
